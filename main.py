@@ -6,18 +6,15 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 import pandas
 
-env = Environment(
-    loader=FileSystemLoader('.'),
-    autoescape=select_autoescape(['html', 'xml'])
-)
-
-template = env.get_template('template.html')
-
 
 def calculate_difference_years():
     foundation_year = 1920
-    current_year = datetime.datetime.now()
-    past_year = current_year.year - foundation_year
+    current_year = datetime.datetime.now().year
+    past_year = current_year - foundation_year
+    return past_year
+
+
+def take_word_suffix(past_year):
     if (past_year % 10 == 1) and (past_year != 11) and (past_year != 111):
         suffix = 'год'
     elif (past_year % 10 > 1) and (past_year % 10 < 5) \
@@ -26,7 +23,7 @@ def calculate_difference_years():
         suffix = 'годa'
     else:
         suffix = 'лет'
-    return past_year, suffix
+    return suffix
 
 
 def take_categories(excle_file_name):
@@ -58,27 +55,36 @@ def take_categories(excle_file_name):
     return categories
 
 
-prices = []
-categories = take_categories('wine3.xlsx')
-for category, descriptions in categories.items():
-    for description in descriptions:
-        prices.append(description['Цена'])
-promotional_price = min(prices)
+def take_promotional_price(categories):
+    prices = []
+    for category, descriptions in categories.items():
+        for description in descriptions:
+            prices.append(description['Цена'])
+    promotional_price = min(prices)
+    return promotional_price
 
 
-past_year, suffix = calculate_difference_years()
-rendered_page = template.render(
-    past_year=str(past_year),
-    suffix=suffix,
-    promotional_price=promotional_price,
-    categories=take_categories('wine3.xlsx')
-)
+def main():
+    env = Environment(
+        loader=FileSystemLoader('.'),
+        autoescape=select_autoescape(['html', 'xml'])
+    )
+    template = env.get_template('template.html')
+    past_year = calculate_difference_years()
+    suffix = take_word_suffix(past_year)
+    categories = take_categories('wine3.xlsx')
+    promotional_price = take_promotional_price(categories)
+    rendered_page = template.render(
+        past_year=str(past_year),
+        suffix=suffix,
+        promotional_price=promotional_price,
+        categories=categories
+    )
+    with open('index.html', 'w', encoding="utf8") as file:
+        file.write(rendered_page)
+    server = HTTPServer(('0.0.0.0', 8000), SimpleHTTPRequestHandler)
+    server.serve_forever()
 
 
-with open('index.html', 'w', encoding="utf8") as file:
-    file.write(rendered_page)
-
-server = HTTPServer(('0.0.0.0', 8000), SimpleHTTPRequestHandler)
-server.serve_forever()
-
-
+if __name__ == '__main__':
+    main()
