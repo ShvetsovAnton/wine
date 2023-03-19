@@ -1,10 +1,15 @@
 import datetime
+import os
+from pathlib import Path
 from collections import defaultdict
-from http.server import HTTPServer, SimpleHTTPRequestHandler
-
-from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 import pandas
+import click
+
+from http.server import HTTPServer, SimpleHTTPRequestHandler
+from jinja2 import Environment, FileSystemLoader, select_autoescape
+
+from dotenv import load_dotenv
 
 
 def calculate_difference_years():
@@ -26,10 +31,10 @@ def take_word_suffix(past_year):
     return suffix
 
 
-def take_categories(excle_file_name):
+def take_categories(sheet):
     categories = defaultdict(list)
     category_rows = []
-    categories_tabel = pandas.read_excel(excle_file_name).fillna(
+    categories_tabel = pandas.read_excel(sheet).fillna(
         '', inplace=False
     )
     unique_drinks_categories = categories_tabel.Категория.unique()
@@ -64,15 +69,29 @@ def take_promotional_price(categories):
     return promotional_price
 
 
-def main():
-    env = Environment(
-        loader=FileSystemLoader('.'),
-        autoescape=select_autoescape(['html', 'xml'])
+@click.command()
+@click.option('--sheet_path', required=True)
+@click.option('--sheet_name', required=True)
+def main(sheet_path, sheet_name):
+    load_dotenv()
+    template_path = os.getenv('TEMPLATE_PATH', default='.')
+    template_extensions = os.getenv(
+        'TEMPLATE_EXTENSIONS', default=['html', 'xml']
     )
-    template = env.get_template('template.html')
+    host_address = os.getenv('HOST_ADDRESS', default='0.0.0.0')
+    host_port = int(os.getenv('HOST_PORT', default=8000))
+    template_name = os.getenv('TEMPLATE_NAME', default='template')
+    sheet_path = Path(sheet_path)
+    sheet_name = sheet_name
+    sheet = sheet_path / sheet_name
+    env = Environment(
+        loader=FileSystemLoader(template_path),
+        autoescape=select_autoescape(template_extensions)
+    )
+    template = env.get_template(template_name)
     past_year = calculate_difference_years()
     suffix = take_word_suffix(past_year)
-    categories = take_categories('wine3.xlsx')
+    categories = take_categories(sheet)
     promotional_price = take_promotional_price(categories)
     rendered_page = template.render(
         past_year=str(past_year),
@@ -82,7 +101,7 @@ def main():
     )
     with open('index.html', 'w', encoding="utf8") as file:
         file.write(rendered_page)
-    server = HTTPServer(('0.0.0.0', 8000), SimpleHTTPRequestHandler)
+    server = HTTPServer((host_address, host_port), SimpleHTTPRequestHandler)
     server.serve_forever()
 
 
